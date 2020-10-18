@@ -40,6 +40,23 @@ To submit your homework:
 
 
 """
+import traceback
+
+
+def index(*args):
+    return """
+            <h1>WSGI Calculator</h1>
+            <h2>All requests must be URLs in the form "domain/function/x/y/z"</h2>
+            <h2>Legal values for function are listed in the table below with number of arguments</h2>
+            <br>
+           <table border="1"><tr><th>Math Function</th><th>Arguments</th></tr>
+           <tr><td>add</td><td>As Many As You Like</td></tr>
+           <tr><td>multiply</td><td>As Many As You Like</td></tr>
+           <tr><td>subtract</td><td>Must Have 2</td></tr>
+           <tr><td>divide</td><td>Must Have 2</td></tr>
+           </table>"
+           """
+
 
 
 def add(*args):
@@ -47,11 +64,38 @@ def add(*args):
 
     # TODO: Fill sum with the correct value, based on the
     # args provided.
-    sum = "0"
+    addends = args
+    sum = 0
+    for x in addends:
+        sum += float(x)
 
-    return sum
+    return str(sum)
 
 # TODO: Add functions for handling more arithmetic operations.
+
+
+def multiply(*args):
+    multiplicands = args
+    if len(multiplicands) == 0:
+        return "No Arguments Given"
+
+    product = 1
+    for x in multiplicands:
+        product *= float(x)
+    return str(product)
+
+
+def divide(*args):
+    if len(args) != 2:
+        return "Improper Number of Arguments"
+    return str(float(args[0]) / float(args[1]))
+
+
+def subtract(*args):
+    if len(args) != 2:
+        return "Improper Number of Arguments"
+    return str(float(args[0]) - float(args[1]))
+
 
 def resolve_path(path):
     """
@@ -63,10 +107,26 @@ def resolve_path(path):
     # examples provide the correct *syntax*, but you should
     # determine the actual values of func and args using the
     # path.
-    func = add
-    args = ['25', '32']
+    funcs = {
+        '': index,
+        'add': add,
+        'multiply': multiply,
+        'divide': divide,
+        'subtract': subtract
+    }
+
+    path = path.strip('/').split('/')
+
+    func_name = path[0]
+    args = path[1:]
+
+    try:
+        func = funcs[func_name]
+    except KeyError:
+        raise NameError
 
     return func, args
+
 
 def application(environ, start_response):
     # TODO: Your application code from the book database
@@ -74,11 +134,36 @@ def application(environ, start_response):
     # invoke start_response(status, headers) and also return
     # the body of the response in BYTE encoding.
     #
+    headers = [("Content-type", "text/html")]
+    try:
+        path = environ.get('PATH_INFO', None)
+        if path is None:
+            raise NameError
+        func, args = resolve_path(path)
+        body = func(*args)
+        status = "200 OK"
+    except NameError:
+        status = "404 Not Found"
+        body = "<h1>Not Found</h1>"
+    except ZeroDivisionError:
+        status = "400 Bad Data"
+        body = "<h1>Unable to Divide by Zero</h1>"
+    except Exception:
+        status = "500 Internal Server Error"
+        body = "<h1>Internal Server Error</h1>"
+        print(traceback.format_exc())
+    finally:
+        headers.append(('Content-length', str(len(body))))
+        start_response(status, headers)
+        return [body.encode('utf8')]
     # TODO (bonus): Add error handling for a user attempting
     # to divide by zero.
     pass
 
+
 if __name__ == '__main__':
     # TODO: Insert the same boilerplate wsgiref simple
     # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    srv = make_server('localhost', 8080, application)
+    srv.serve_forever()
